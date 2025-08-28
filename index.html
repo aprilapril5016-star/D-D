@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catur Online Ultra Pro</title>
+<style>
+body { font-family:sans-serif; text-align:center; background:#f0f0f0; padding:20px; }
+#board { display:grid; grid-template-columns: repeat(8,60px); grid-template-rows: repeat(8,60px); margin:20px auto; border:2px solid #333; }
+.cell { width:60px; height:60px; display:flex; align-items:center; justify-content:center; font-size:32px; cursor:pointer; transition: all 0.3s; }
+.white { background:#eee; }
+.black { background:#666; color:white; }
+#turn { margin-top:10px; font-size:18px; }
+#chat { width:300px; height:200px; border:1px solid #333; margin:10px auto; overflow-y:scroll; background:white; color:black; text-align:left; padding:5px; }
+#chatInput { width:200px; }
+#leaderboard { width:300px; margin:10px auto; text-align:left; background:white; padding:5px; border:1px solid #333; }
+</style>
+</head>
+<body>
+
+<h1>Catur Online Ultra Pro</h1>
+<label>Room: <input type="text" id="room" placeholder="Kode room"></label>
+<label>Nama: <input type="text" id="username" placeholder="Nama kamu"></label>
+<button id="joinBtn">Join Room</button>
+
+<div id="turn">Giliran: Putih</div>
+<div id="board"></div>
+
+<h3>Chat</h3>
+<div id="chat"></div>
+<input type="text" id="chatInput" placeholder="Tulis pesan">
+<button id="sendChatBtn">Kirim</button>
+
+<h3>Leaderboard</h3>
+<div id="leaderboard"></div>
+
+<!-- Load Supabase JS terlebih dahulu -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<script>
+// Inisialisasi client Supabase
+const SUPABASE_URL = 'https://nnmcsssdkdkbrhlbhiwl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ubWNzc3Nka2RrYnJobGJoaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3NzIxNTgsImV4cCI6MjA3MTM0ODE1OH0.eUMIsTF4BVvrMQ2ItjfS5S0O3vmWcp0Ney9KsK4NLgA';
+const supabaseClient = supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+
+// ====== Variabel utama ======
+let board = [];
+const pieces = {'r':'♜','n':'♞','b':'♝','q':'♛','k':'♚','p':'♟','R':'♖','N':'♘','B':'♗','Q':'♕','K':'♔','P':'♙'};
+let turn = 'white';
+let roomId = '';
+let username = '';
+let selected = null;
+
+const boardEl = document.getElementById('board');
+const turnEl = document.getElementById('turn');
+const chatEl = document.getElementById('chat');
+const leaderboardEl = document.getElementById('leaderboard');
+
+// ====== Fungsi Board ======
+function createBoardUI(){
+  boardEl.innerHTML='';
+  board.forEach((r,i)=>{
+    r.forEach((c,j)=>{
+      const cell = document.createElement('div');
+      cell.className='cell '+((i+j)%2===0?'white':'black');
+      cell.innerText = pieces[c]||'';
+      cell.onclick = ()=>selectCell(i,j);
+      boardEl.appendChild(cell);
+    });
+  });
+}
+
+function selectCell(row,col){
+  if(selected){
+    movePiece(selected.row,selected.col,row,col);
+    selected=null;
+  } else {
+    const piece = board[row][col];
+    if(piece && ((turn==='white' && piece===piece.toUpperCase()) || (turn==='black' && piece===piece.toLowerCase()))){
+      selected = {row,col};
+    }
+  }
+}
+
+// ====== Validasi gerakan sederhana ======
+function isLegalMove(fromRow,fromCol,toRow,toCol){
+  const piece = board[fromRow][fromCol];
+  if(!piece) return false;
+  const isWhite = piece===piece.toUpperCase();
+  const dr = toRow - fromRow;
+  const dc = toCol - fromCol;
+
+  switch(piece.toLowerCase()){
+    case 'p': 
+      const dir = isWhite?-1:1;
+      if(dc===0 && dr===dir && !board[toRow][toCol]) return true;
+      if(dc===0 && dr===2*dir && ((fromRow===6 && isWhite) || (fromRow===1 && !isWhite)) && !board[fromRow+dir][fromCol] && !board[toRow][toCol]) return true;
+      if(Math.abs(dc)===1 && dr===dir && board[toRow][toCol] && ((isWhite && board[toRow][toCol]===board[toRow][toCol].toLowerCase()) || (!isWhite && board[toRow][toCol]===board[toRow][toCol].toUpperCase()))) return true;
+      return false;
+    case 'r': return dr===0 || dc===0;
+    case 'n': return (Math.abs(dr)===2 && Math.abs(dc)===1) || (Math.abs(dr)===1 && Math.abs(dc)===2);
+    case 'b': return Math.abs(dr)===Math.abs(dc);
+    case 'q': return dr===0 || dc===0 || Math.abs(dr)===Math.abs(dc);
+    case 'k': return Math.abs(dr)<=1 && Math.abs(dc)<=1;
+  }
+  return false;
+}
+
+// ====== Fungsi pindah bidak ======
+async function movePiece(fromRow,fromCol,toRow,toCol){
+  if(!isLegalMove(fromRow,fromCol,toRow,toCol)) return;
+
+  board[toRow][toCol] = board[fromRow][fromCol];
+  board[fromRow][fromCol] = '';
+
+  // Pawn promotion
+  if(board[toRow][toCol].toLowerCase()==='p' && (toRow===0 || toRow===7)){
+    const promoted = prompt("Pawn promotion! Pilih: Q/R/B/N","Q");
+    const newPiece = promoted?promoted.toUpperCase():'Q';
+    board[toRow][toCol] = (board[toRow][toCol]===board[toRow][toCol].toUpperCase()?newPiece:newPiece.toLowerCase());
+  }
+
+  turn = turn==='white'?'black':'white';
+  await supabaseClient.from('games').update({board_state: JSON.stringify(board), turn}).eq('room', roomId);
+  updateLeaderboard();
+}
+
+// ====== Join Room ======
+async function joinRoom(){
+  roomId = document.getElementById('room').value;
+  username = document.getElementById('username').value || 'Player';
+  if(!roomId){ alert('Isi kode room!'); return; }
+
+  const {data,error} = await supabaseClient.from('games').select('*').eq('room', roomId).single();
+  if(data){
+    board = JSON.parse(data.board_state);
+    turn = data.turn;
+  } else {
+    board = [
+      ['r','n','b','q','k','b','n','r'],
+      ['p','p','p','p','p','p','p','p'],
+      ['','','','','','','',''],
+      ['','','','','','','',''],
+      ['','','','','','','',''],
+      ['','','','','','','',''],
+      ['P','P','P','P','P','P','P','P'],
+      ['R','N','B','Q','K','B','N','R']
+    ];
+    turn = 'white';
+    await supabaseClient.from('games').insert({room: roomId, board_state: JSON.stringify(board), turn});
+  }
+
+  createBoardUI();
+  turnEl.innerText = 'Giliran: '+(turn==='white'?'Putih':'Hitam');
+
+  // Realtime board
+  supabaseClient.from('games:room=eq.'+roomId).on('UPDATE', payload=>{
+    board = JSON.parse(payload.new.board_state);
+    turn = payload.new.turn;
+    createBoardUI();
+    turnEl.innerText = 'Giliran: '+(turn==='white'?'Putih':'Hitam');
+  }).subscribe();
+
+  // Realtime chat
+  supabaseClient.from('game_chat:room=eq.'+roomId).on('INSERT', payload=>{
+    const m = payload.new;
+    const div = document.createElement('div');
+    div.innerText = m.username+': '+m.message;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }).subscribe();
+}
+
+// ====== Chat ======
+async function sendChat(){
+  const msg = document.getElementById('chatInput').value;
+  if(msg==='') return;
+  await supabaseClient.from('game_chat').insert({room:roomId,username:username,message:msg});
+  document.getElementById('chatInput').value='';
+}
+
+// ====== Leaderboard ======
+async function updateLeaderboard(){
+  const {data,error} = await supabaseClient.from('games').select('*');
+  if(data){
+    let html = '';
+    data.forEach(g=>{
+      html += g.room+' - Giliran: '+g.turn+'<br>';
+    });
+    leaderboardEl.innerHTML = html;
+  }
+}
+
+document.getElementById('joinBtn').addEventListener('click', joinRoom);
+document.getElementById('sendChatBtn').addEventListener('click', sendChat);
+</script>
+</body>
+</html>
