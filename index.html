@@ -34,14 +34,14 @@ body { font-family:sans-serif; text-align:center; background:#f0f0f0; padding:20
 <h3>Leaderboard</h3>
 <div id="leaderboard"></div>
 
-<!-- Load Supabase JS terlebih dahulu -->
+<!-- Load Supabase JS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
 <script>
-// Inisialisasi client Supabase
-const SUPABASE_URL = 'https://nnmcsssdkdkbrhlbhiwl.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ubWNzc3Nka2RrYnJobGJoaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3NzIxNTgsImV4cCI6MjA3MTM0ODE1OH0.eUMIsTF4BVvrMQ2ItjfS5S0O3vmWcp0Ney9KsK4NLgA';
-const supabaseClient = supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+// ====== Supabase Client ======
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ====== Variabel utama ======
 let board = [];
